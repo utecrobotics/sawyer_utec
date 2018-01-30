@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+
+  <param name="robot_description" textfile="$(find sawyer_description)/urdf/sawyer.urdf" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find sawyer_utec)/config/sawyer.rviz" required="true" />
+
+</launch>

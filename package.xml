@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>sawyer_utec</name>
+  <version>0.0.0</version>
+  <description>
+    Package for the Sawyer robot at UTEC
+  </description>
+
+  <maintainer email="oramos@utec.edu.pe">Oscar E. Ramos</maintainer>
+  <license>BSD</license>
+  <author email="oramos@utec.edu.pe">Oscar E. Ramos</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <export>
+  </export>
+
+</package>
