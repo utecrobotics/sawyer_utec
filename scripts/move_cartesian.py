@@ -128,6 +128,70 @@ def get_ik(pose, q_initial):
     return result
 
 
+def pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
+               zpre_grasp, qinit):
+    """
+    Pick and place an object
+
+      limb - robot limb object
+      gripper - robot gripper object
+      pose_initial - tuple ((x,y,z),(ew,ex,ey,ez))
+      pose_final - tuple ((x,y,z),(ew,ex,ey,ez))
+      gripper_opening - opening of the gripper (double)
+      zpre_grasp - height for the pre-grasping
+      qinit - joint configuration for starting the computation of the inverse
+              kinematics
+
+    """
+
+    # Get initial and final position/orientation
+    xi = pose_initial[0][0]
+    yi = pose_initial[0][1]
+    zi = pose_initial[0][2]
+    quat_i = pose_initial[1]
+    xf = pose_final[0][0]
+    yf = pose_final[0][1]
+    zf = pose_final[0][2]
+    quat_f = pose_final[1]
+    
+    # Move to a pre-grasping position
+    pose = ((xi, yi, zi+zpre_grasp), quat_i)
+    result = get_ik(pose, qinit)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+    # Move to grasp the object
+    pose = ((xi, yi, zi), quat_i)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+    # Close the gripper (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper.set_position(gripper_opening) 
+    time.sleep(1.0)
+    # Move the object up (intermediate pose)
+    pose = ((xi, yi, zi+zpre_grasp), quat_i)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+    # Move the object in the air
+    pose = ((xf, yf, zf+zpre_grasp), quat_f)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+    # Move to the final (release) pose
+    pose = ((xf, yf, zf), quat_f)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+    # Open the gripper
+    gripper.open()
+    time.sleep(1.0)
+    # Move upwards without the object
+    pose = ((xf, yf, zf+zpre_grasp), quat_f)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+
+
 def main():
     # Initialize the node
     rospy.init_node('MoveCartesian')
@@ -154,46 +218,18 @@ def main():
     # Motion for object 1
     # ===================
 
-    # Move to a pre-grasping position
-    quat = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-    # quat = rotationToQuaternion(
-    #     np.array([[1.0, 0.0, 0.0],[0.0, 1.0, 0.0],[0.0, 0.0, 1.0]]) )
-    pose = ((0.65, 0.20, 0.20), quat)
-    result = get_ik(pose, jangles_neutral)
-    if (result.valid):
-        limb.move_to_joint_positions(result.jangles)
-    # Move to grasp the object
-    pose = ((0.65, 0.20, 0.0), quat)
-    result = get_ik(pose, result.jangles)
-    if (result.valid):
-        limb.move_to_joint_positions(result.jangles)
-    # Close the gripper (0*dgripper [closed] to nsteps*dgripper [open])
-    gripper.set_position(1.0*dgripper) 
-    time.sleep(1.0)
-    # Move the object up (intermediate pose)
-    pose = ((0.65, 0.20, 0.20), quat)
-    result = get_ik(pose, result.jangles)
-    if (result.valid):
-        limb.move_to_joint_positions(result.jangles)
-    # Move the object in the air
-    pose = ((0.65, -0.30, 0.20), quat)
-    result = get_ik(pose, result.jangles)
-    if (result.valid):
-        limb.move_to_joint_positions(result.jangles)
-    # Move to the final (release) pose
-    pose = ((0.65, -0.30, 0.0), quat)
-    result = get_ik(pose, result.jangles)
-    if (result.valid):
-        limb.move_to_joint_positions(result.jangles)
-    # Open the gripper
-    gripper.open()
-    time.sleep(1.0)
-    # Move upwards without the object
-    pose = ((0.65, -0.30, 0.20), quat)
-    result = get_ik(pose, result.jangles)
-    if (result.valid):
-        limb.move_to_joint_positions(result.jangles)
-
+    # Initial and final poses of the object
+    quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial = ((0.65, 0.20, 0.10), quat_init)
+    quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final   = ((0.65, -0.30, 0.10), quat_final)
+    # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 1.0*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.20
+    pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
+               z_pre_grasp, jangles_neutral)
+   
 
 if __name__ == '__main__':
     main()
