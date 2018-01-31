@@ -8,16 +8,17 @@
 #     rosrun intera_interface enable_robot.py -d
 # 
 
-import rospy
-import intera_interface
+import numpy as np
+import time
 
+import rospy
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import JointState
+
+import intera_interface
 from intera_core_msgs.srv import SolvePositionIK, SolvePositionIKRequest
 
 from utils import *
-import numpy as np
-import time
 
 
 class JointResult:
