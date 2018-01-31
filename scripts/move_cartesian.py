@@ -20,7 +20,7 @@ import numpy as np
 import time
 
 
-class result:
+class JointResult:
     jangles = {}
     valid = False
 
@@ -59,14 +59,23 @@ def get_ik(pose, q_initial):
     """
     Get the inverse kinematics of the robot for a given pose
 
+    Arguments:
+
       pose - desired pose in the format ((x,y,z), (ew,ex,ey,ez)), containing
              the position and orientation (quaternion)
       q_initial - list of initial joint configuration used as initial point
                   when computing the inverse kinematics
 
+    Returns:
+
+      result - structure containing the joint angles from inverse kinematics and an
+               indication of whether the values are valid
+
     """
     pose_msg = pose_to_dict_message(pose[0], pose[1])
     limb = "right"
+    # Structure that the function returns
+    result = JointResult()
     # Service name
     serv_name = "ExternalTools/" + limb + "/PositionKinematicsNode/IKService"
     # Client for the inverse kinematics server
@@ -95,7 +104,7 @@ def get_ik(pose, q_initial):
         ik_response = ik_client(ik_request)
     except (rospy.ServiceException, rospy.ROSException), e:
         rospy.logerr("Service call failed: %s" % (e,))
-        return ({}, False)
+        return result
 
     # Check if result is valid
     if (ik_response.result_type[0] > 0):
@@ -112,9 +121,11 @@ def get_ik(pose, q_initial):
     else:
         rospy.logerr("INVALID POSE - No valid joint solution found.")
         rospy.logerr("Result Error %d", ik_response.result_type[0])
-        return ({}, False)
+        return result
     # Return the joint configuration
-    return (limb_joints, True)
+    result.jangles = limb_joints
+    result.valid = True
+    return result
 
 
 def main():
@@ -132,57 +143,56 @@ def main():
         rospy.logerr("Could not detect a gripper")
         return
     
-    # Move arm to initial position
+    # Move arm to the initial position
     limb.move_to_neutral()
     jangles_neutral = limb.joint_angles()
-    print jangles_neutral
-
-    # Object 1
-    # --------
+    if (False): print jangles_neutral
     # Open the gripper
     gripper.open()
-    # gripper.set_position(0*dgripper) # closed
-    # gripper.set_position(5*dgripper) # open
-    # Pre-grasp object 1
-    #quat = quaternionFromAxisAngle(90.0, (1.0, 0.0, 0.0))
+
+    # ===================
+    # Motion for object 1
+    # ===================
+
+    # Move to a pre-grasping position
     quat = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-    pose = ((0.65, 0.20, 0.20), quat)
-    jangles = get_ik(pose, jangles_neutral)
-    if (jangles[1]):
-        limb.move_to_joint_positions(jangles[0])
-    # Grasp object 1
     # quat = rotationToQuaternion(
     #     np.array([[1.0, 0.0, 0.0],[0.0, 1.0, 0.0],[0.0, 0.0, 1.0]]) )
-    pose = ((0.65, 0.20, 0.0), quat)
-    jangles = get_ik(pose, jangles[0])
-    if (jangles[1]):
-        limb.move_to_joint_positions(jangles[0])
-    # Close the gripper
-    gripper.set_position(1*dgripper)
-    time.sleep(1.0)
-    # Intermediate 1 (up)
     pose = ((0.65, 0.20, 0.20), quat)
-    jangles = get_ik(pose, jangles[0])
-    if (jangles[1]):
-        limb.move_to_joint_positions(jangles[0])
-    # Intermediate 2 (move)
+    result = get_ik(pose, jangles_neutral)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+    # Move to grasp the object
+    pose = ((0.65, 0.20, 0.0), quat)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+    # Close the gripper (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper.set_position(1.0*dgripper) 
+    time.sleep(1.0)
+    # Move the object up (intermediate pose)
+    pose = ((0.65, 0.20, 0.20), quat)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+    # Move the object in the air
     pose = ((0.65, -0.30, 0.20), quat)
-    jangles = get_ik(pose, jangles[0])
-    if (jangles[1]):
-        limb.move_to_joint_positions(jangles[0])
-    # Final pose (release)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+    # Move to the final (release) pose
     pose = ((0.65, -0.30, 0.0), quat)
-    jangles = get_ik(pose, jangles[0])
-    if (jangles[1]):
-        limb.move_to_joint_positions(jangles[0])
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
     # Open the gripper
     gripper.open()
     time.sleep(1.0)
-    # Release
+    # Move upwards without the object
     pose = ((0.65, -0.30, 0.20), quat)
-    jangles = get_ik(pose, jangles[0])
-    if (jangles[1]):
-        limb.move_to_joint_positions(jangles[0])
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
 
 
 if __name__ == '__main__':
