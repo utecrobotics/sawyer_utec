@@ -17,6 +17,12 @@ from intera_core_msgs.srv import SolvePositionIK, SolvePositionIKRequest
 
 from utils import *
 import numpy as np
+import time
+
+
+class result:
+    jangles = {}
+    valid = False
 
 
 def pose_to_dict_message(position, orientation):
@@ -36,7 +42,7 @@ def pose_to_dict_message(position, orientation):
     # Stamped pose message
     pose_msg = PoseStamped()
     pose_msg.header.stamp = rospy.Time.now()
-    pose_msg.frame_id = 'base'
+    pose_msg.header.frame_id = 'base'
     pose_msg.pose.position.x = position[0]
     pose_msg.pose.position.y = position[1]
     pose_msg.pose.position.z = position[2]
@@ -77,19 +83,10 @@ def get_ik(pose, q_initial):
     seed = JointState()
     seed.name = ['right_j0', 'right_j1', 'right_j2', 'right_j3',
                  'right_j4', 'right_j5', 'right_j6']
-    seed.position = q_initial
+    seed.position = [q_initial['right_j0'], q_initial['right_j1'], q_initial['right_j2'],
+                     q_initial['right_j3'], q_initial['right_j4'], q_initial['right_j5'],
+                     q_initial['right_j6']]
     ik_request.seed_angles.append(seed)
-
-    # # After the primary IK task, the solver tries to bias the the joint angles
-    # # toward the goal joint configuration (using the null space)
-    # ik_request.use_nullspace_goal.append(True)
-    # # Nullspace goal: full set or subset of joint angles
-    # goal = JointState()
-    # goal.name = ['right_j1', 'right_j2', 'right_j3']
-    # goal.position = [0.1, -0.3, 0.5]
-    # ik_request.nullspace_goal.append(goal)
-    # # The gain to bias towards the nullspace goal.
-    # ikreq.nullspace_gain.append(0.4)
 
     try:
         # Block until the service is available
@@ -98,7 +95,7 @@ def get_ik(pose, q_initial):
         ik_response = ik_client(ik_request)
     except (rospy.ServiceException, rospy.ROSException), e:
         rospy.logerr("Service call failed: %s" % (e,))
-        return False
+        return ({}, False)
 
     # Check if result is valid
     if (ik_response.result_type[0] > 0):
@@ -115,9 +112,9 @@ def get_ik(pose, q_initial):
     else:
         rospy.logerr("INVALID POSE - No valid joint solution found.")
         rospy.logerr("Result Error %d", ik_response.result_type[0])
-        return False
+        return ({}, False)
     # Return the joint configuration
-    return limb_joints
+    return (limb_joints, True)
 
 
 def main():
@@ -129,7 +126,8 @@ def main():
     try:
         gripper = intera_interface.Gripper('right')
         gripper.calibrate()
-        gripper_maxpos = gripper.MAX_POSITION
+        nsteps = 5.0 # Increase it for a finer motion
+        dgripper = gripper.MAX_POSITION / nsteps
     except ValueError:
         rospy.logerr("Could not detect a gripper")
         return
@@ -143,33 +141,48 @@ def main():
     # --------
     # Open the gripper
     gripper.open()
+    # gripper.set_position(0*dgripper) # closed
+    # gripper.set_position(5*dgripper) # open
     # Pre-grasp object 1
-    quat = quaternionFromAxisAngle(0.0, (1.0, 0.0, 0.0))
-    pose = ((x, y, z), quat)
+    #quat = quaternionFromAxisAngle(90.0, (1.0, 0.0, 0.0))
+    quat = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose = ((0.65, 0.20, 0.20), quat)
     jangles = get_ik(pose, jangles_neutral)
-    limb.move_to_joint_positions(jangles)
+    if (jangles[1]):
+        limb.move_to_joint_positions(jangles[0])
     # Grasp object 1
     # quat = rotationToQuaternion(
     #     np.array([[1.0, 0.0, 0.0],[0.0, 1.0, 0.0],[0.0, 0.0, 1.0]]) )
-    pose = ((x, y, z), (ew, ex, ey, ez))
-    jangles = get_ik(pose, jangles)
-    limb.move_to_joint_positions(jangles)
-    # Close the gripper (0.0: close, 100.0: open)
-    gripper.set_position(50.0)
+    pose = ((0.65, 0.20, 0.0), quat)
+    jangles = get_ik(pose, jangles[0])
+    if (jangles[1]):
+        limb.move_to_joint_positions(jangles[0])
+    # Close the gripper
+    gripper.set_position(1*dgripper)
+    time.sleep(1.0)
     # Intermediate 1 (up)
-    pose = ((x, y, z), (ew, ex, ey, ez))
-    jangles = get_ik(pose, jangles_neutral)
-    limb.move_to_joint_positions(jangles)
+    pose = ((0.65, 0.20, 0.20), quat)
+    jangles = get_ik(pose, jangles[0])
+    if (jangles[1]):
+        limb.move_to_joint_positions(jangles[0])
     # Intermediate 2 (move)
-    pose = ((x, y, z), (ew, ex, ey, ez))
-    jangles = get_ik(pose, jangles_neutral)
-    limb.move_to_joint_positions(jangles)
+    pose = ((0.65, -0.30, 0.20), quat)
+    jangles = get_ik(pose, jangles[0])
+    if (jangles[1]):
+        limb.move_to_joint_positions(jangles[0])
     # Final pose (release)
-    pose = ((x, y, z), (ew, ex, ey, ez))
-    jangles = get_ik(pose, jangles_neutral)
-    limb.move_to_joint_positions(jangles)
+    pose = ((0.65, -0.30, 0.0), quat)
+    jangles = get_ik(pose, jangles[0])
+    if (jangles[1]):
+        limb.move_to_joint_positions(jangles[0])
     # Open the gripper
-    griper.open()
+    gripper.open()
+    time.sleep(1.0)
+    # Release
+    pose = ((0.65, -0.30, 0.20), quat)
+    jangles = get_ik(pose, jangles[0])
+    if (jangles[1]):
+        limb.move_to_joint_positions(jangles[0])
 
 
 if __name__ == '__main__':
