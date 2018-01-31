@@ -12,6 +12,7 @@ import numpy as np
 import time
 
 import rospy
+from roslib import packages
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import JointState
 
@@ -93,8 +94,9 @@ def get_ik(pose, q_initial):
     seed = JointState()
     seed.name = ['right_j0', 'right_j1', 'right_j2', 'right_j3',
                  'right_j4', 'right_j5', 'right_j6']
-    seed.position = [q_initial['right_j0'], q_initial['right_j1'], q_initial['right_j2'],
-                     q_initial['right_j3'], q_initial['right_j4'], q_initial['right_j5'],
+    seed.position = [q_initial['right_j0'], q_initial['right_j1'],
+                     q_initial['right_j2'], q_initial['right_j3'],
+                     q_initial['right_j4'], q_initial['right_j5'],
                      q_initial['right_j6']]
     ik_request.seed_angles.append(seed)
 
@@ -199,6 +201,7 @@ def main():
 
     # Initialize interfaces
     limb = intera_interface.Limb('right')
+    head_display = intera_interface.HeadDisplay()
     try:
         gripper = intera_interface.Gripper('right')
         gripper.calibrate()
@@ -208,9 +211,10 @@ def main():
         rospy.logerr("Could not detect a gripper")
         return
 
+    # Set the path for images
+    folder = str(packages.get_pkg_dir('sawyer_utec')) + '/images/'
     # Diplay the UTEC logo in the robot head
-    head_display = intera_interface.HeadDisplay()
-    head_display.display_image('logo_utec.png', False, 1.0)
+    head_display.display_image(folder+'logo_utec.png', False, 1.0)
     
     # Move arm to the initial position
     limb.move_to_neutral()
@@ -229,13 +233,13 @@ def main():
     quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
     pose_final   = ((0.65, -0.30, 0.10), quat_final)
     # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
-    gripper_opening = 1.0*dgripper
+    gripper_opening = 2.0*dgripper
     # Offset in z (from the desired position) for pre-grasping
     z_pre_grasp = 0.20
     pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
                z_pre_grasp, jangles_neutral)
     # Display another face
-    head_display.display_image('sleepy.png', False, 1.0)
+    head_display.display_image(folder+'sleepy.png', False, 1.0)
 
 
 if __name__ == '__main__':
