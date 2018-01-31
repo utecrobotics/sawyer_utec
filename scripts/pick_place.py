@@ -229,9 +229,9 @@ def main():
 
     # Initial and final poses of the object
     quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-    pose_initial = ((0.65, 0.20, 0.10), quat_init)
+    pose_initial = ((0.65, 0.20, 0.30), quat_init)
     quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-    pose_final   = ((0.65, -0.30, 0.10), quat_final)
+    pose_final   = ((0.0, -0.50, 0.30), quat_final)
     # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
     gripper_opening = 2.0*dgripper
     # Offset in z (from the desired position) for pre-grasping
