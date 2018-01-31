@@ -206,6 +206,10 @@ def main():
     except ValueError:
         rospy.logerr("Could not detect a gripper")
         return
+
+    # Diplay the UTEC logo in the robot head
+    head_display = intera_interface.HeadDisplay()
+    head_display.display_image('logo_utec.png', False, 1.0)
     
     # Move arm to the initial position
     limb.move_to_neutral()
@@ -229,7 +233,9 @@ def main():
     z_pre_grasp = 0.20
     pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
                z_pre_grasp, jangles_neutral)
-   
+    # Display another face
+    head_display.display_image('sleepy.png', False, 1.0)
+
 
 if __name__ == '__main__':
     main()
