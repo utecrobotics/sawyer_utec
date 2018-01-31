@@ -1,10 +1,10 @@
 #!/usr/bin/python
 #
-# Move Robot in the Cartesian spacec
+# Pick and place motion for the robot
 #
 # To execute:
 #     rosrun intera_interface enable_robot.py -e
-#     rosrun sawyer_utec move_cartesian.py
+#     rosrun sawyer_utec pick_place.py
 #     rosrun intera_interface enable_robot.py -d
 # 
 
