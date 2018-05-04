@@ -1,6 +1,7 @@
 #!/usr/bin/python
 #
-# Pick and place motion for the robot
+# Basic pick and place motion for the robot
+# (only for one cup)
 #
 # To execute:
 #     rosrun intera_interface enable_robot.py -e

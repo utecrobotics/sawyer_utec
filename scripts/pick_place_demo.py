@@ -1,6 +1,7 @@
 #!/usr/bin/python
 #
-# Pick and place motion for the robot
+# Demo of pick and place motion for the robot
+# (it uses several cups)
 #
 # To execute:
 #     rosrun intera_interface enable_robot.py -e
@@ -170,6 +171,8 @@ def pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
     # Close the gripper (0*dgripper [closed] to nsteps*dgripper [open])
     gripper.set_position(gripper_opening) 
     time.sleep(1.0)
+
+
     # Move the object up (intermediate pose)
     pose = ((xi, yi, zi+zpre_grasp), quat_i)
     result = get_ik(pose, result.jangles)
@@ -188,12 +191,13 @@ def pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
     # Open the gripper
     gripper.open()
     time.sleep(1.0)
+
+
     # Move upwards without the object
     pose = ((xf, yf, zf+zpre_grasp), quat_f)
     result = get_ik(pose, result.jangles)
     if (result.valid):
         limb.move_to_joint_positions(result.jangles)
-
 
 def main():
     # Initialize the node
@@ -214,7 +218,7 @@ def main():
     # Set the path for images
     folder = str(packages.get_pkg_dir('sawyer_utec')) + '/images/'
     # Diplay the UTEC logo in the robot head
-    head_display.display_image(folder+'logo_utec.png', False, 1.0)
+    head_display.display_image(folder+'up1.jpg', False, 1.0)
     
     # Move arm to the initial position
     limb.move_to_neutral()
@@ -227,20 +231,109 @@ def main():
     # Motion for object 1
     # ===================
 
+    # PRIMER PISO
+    # VASO 1 MOD
+     # pose_init1 = ((0.6, 0.50, 0.03), quat_init)
+     # pose_final1   = ((0.6, -0.5, 0.02), quat_final)
+
+    # VASO 2 MOD
+    # pose_initial2 = ((0.6, 0.40, 0.03), quat_init)
+    # pose_final2   = ((0.6, -0.42, 0.02), quat_final)
+ 
+
+    # VASO 3
+    # pose_initial3 = ((0.6, 0.32, 0.03), quat_init)
+    # pose_final3   = ((0.6, -0.34, 0.02), quat_final)
+    
+    # SEGUNDO PISO
+    # VASO 4
+    # pose_initial4 = ((0.7, 0.5, 0.03), quat_init)
+    # pose_final4   = ((0.6, -0.46, 0.12), quat_final)
+
+    # VASO 5
+    # pose_initial5 = ((0.7, 0.4, 0.03), quat_init)
+    # pose_final5   = ((0.6, -0.38, 0.12), quat_final) 
+
+    # VASO 6
+    # pose_initial = ((0.7, 0.4, 0.03), quat_init)
+    # pose_final   = ((0.6, -0.38, 0.12), quat_final) 
+
     # Initial and final poses of the object
+
     quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-    pose_initial = ((0.65, 0.20, 0.30), quat_init)
+    # vaso 1
+    pose_initial1 = ((0.6, 0.50, 0.03), quat_init)
     quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-    pose_final   = ((0.0, -0.50, 0.30), quat_final)
+    pose_final1   = ((0.6, -0.5, 0.02), quat_final)
     # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
-    gripper_opening = 2.0*dgripper
+    gripper_opening = 3.5*dgripper
     # Offset in z (from the desired position) for pre-grasping
     z_pre_grasp = 0.20
-    pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
-               z_pre_grasp, jangles_neutral)
-    # Display another face
-    head_display.display_image(folder+'sleepy.png', False, 1.0)
+    pick_place(limb, gripper, pose_initial1, pose_final1, gripper_opening, z_pre_grasp, jangles_neutral)
 
+    # vaso 2
+    quat_init2 = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial2 = ((0.6, 0.40, 0.03), quat_init)
+    quat_final2 = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final2   = ((0.6, -0.42, 0.02), quat_final)
+# Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 3.5*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.20
+    pick_place(limb, gripper, pose_initial2, pose_final2, gripper_opening, z_pre_grasp, jangles_neutral)
+    
+
+# vaso 3
+    quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial3 = ((0.6, 0.32, 0.03), quat_init)
+    quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final3   = ((0.6, -0.34, 0.02), quat_final)
+# Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 3.5*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.20
+    pick_place(limb, gripper, pose_initial3, pose_final3, gripper_opening, z_pre_grasp, jangles_neutral)
+    
+    # vaso 4
+    quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial4 = ((0.7, 0.5, 0.03), quat_init)
+    quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final4   = ((0.6, -0.46, 0.12), quat_final)
+# Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 3.5*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.20
+    pick_place(limb, gripper, pose_initial4, pose_final4, gripper_opening, z_pre_grasp, jangles_neutral)
+    
+
+    # vaso 5
+    quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial5 = ((0.7, 0.4, 0.03), quat_init)
+    quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final5   = ((0.6, -0.38, 0.12), quat_final) 
+# Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 3.5*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.20
+    pick_place(limb, gripper, pose_initial5, pose_final5, gripper_opening, z_pre_grasp, jangles_neutral)    
+
+    #vaso 6
+    quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial = ((0.7, 0.32, 0.03), quat_init)
+    quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final   = ((0.6, -0.42, 0.22), quat_final)
+    # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 3.5*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.20
+    pick_place(limb, gripper, pose_initial, pose_final, gripper_opening, z_pre_grasp, jangles_neutral)
+    
+    limb.move_to_neutral()
+    jangles_neutral = limb.joint_angles()
+    if (False): print jangles_neutral
+
+    # Display another face
+    head_display.display_image(folder+'sleep1.png', False, 1.0)
 
 if __name__ == '__main__':
     main()
