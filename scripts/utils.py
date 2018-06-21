@@ -89,3 +89,20 @@ def sgn(x):
     else:
         return -1.0
 
+
+def setJoints(q):
+    """
+    Create a message that contains the joint names and the provided joint values.
+
+    Arguments:
+      q -- Joint values with order [q0, q1, q2, q3, q4, q5, q6]. It can be a list, tuple
+           or a 1D numpy array)
+
+    Return:
+      The message with the names: {'right_j0': q0, 'right_j1': q1, ...}
+
+    """
+    msg = {'right_j0': q[0], 'right_j1': q[1], 'right_j2': q[2], 'right_j3': q[3],
+           'right_j4': q[4], 'right_j5': q[5], 'right_j6': q[6]}
+
+    return msg
