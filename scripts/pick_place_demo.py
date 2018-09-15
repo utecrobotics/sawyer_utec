@@ -1,16 +1,19 @@
 #!/usr/bin/python
 #
-# Demo of pick and place motion for the robot
-# (it uses several cups)
+# Sara Vasquez, Frank Barja, Oscar Ramos
+# Department of Mechatronics Engineering
+# Universidad de Ingenieria y Tecnologia - UTEC
+# Lima, Peru
+#
+# Demo of an open loop pick and place motion using several cups
 #
 # To execute:
 #     rosrun intera_interface enable_robot.py -e
-#     rosrun sawyer_utec pick_place.py
+#     rosrun sawyer_utec pick_place_demo.py
 #     rosrun intera_interface enable_robot.py -d
 # 
 
 import numpy as np
-import time
 
 import rospy
 from roslib import packages
@@ -170,7 +173,7 @@ def pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
         limb.move_to_joint_positions(result.jangles)
     # Close the gripper (0*dgripper [closed] to nsteps*dgripper [open])
     gripper.set_position(gripper_opening) 
-    time.sleep(1.0)
+    rospy.sleep(1.0)
 
 
     # Move the object up (intermediate pose)
@@ -190,7 +193,7 @@ def pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
         limb.move_to_joint_positions(result.jangles)
     # Open the gripper
     gripper.open()
-    time.sleep(1.0)
+    rospy.sleep(1.0)
 
 
     # Move upwards without the object
@@ -207,7 +210,7 @@ def main():
     limb = intera_interface.Limb('right')
     head_display = intera_interface.HeadDisplay()
     try:
-        gripper = intera_interface.Gripper('right')
+        gripper = intera_interface.Gripper('right_gripper')
         gripper.calibrate()
         nsteps = 5.0 # Increase it for a finer motion
         dgripper = gripper.MAX_POSITION / nsteps

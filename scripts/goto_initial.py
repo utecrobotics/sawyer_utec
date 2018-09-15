@@ -1,5 +1,10 @@
 #!/usr/bin/python
 #
+# Oscar E. Ramos
+# Department of Mechatronics Engineering
+# Universidad de Ingenieria y Tecnologia - UTEC
+# Lima, Peru
+#
 # Move the robot to its initial position and open the gripper
 #
 # To execute:
@@ -11,29 +16,21 @@
 import rospy
 import intera_interface
 
-from geometry_msgs.msg import PoseStamped
-from sensor_msgs.msg import JointState
-from intera_core_msgs.srv import SolvePositionIK, SolvePositionIKRequest
-
-from utils import *
-import numpy as np
-import time
-
 
 def main():
     # Initialize the node
     rospy.init_node('GoToInitial')
 
-    # Initialize interfaces
+    # Initialize limb interface
     limb = intera_interface.Limb('right')
+    # Move arm to the initial position
+    limb.move_to_neutral()
+    # Initialize gripper interface
     try:
-        gripper = intera_interface.Gripper('right')
+        gripper = intera_interface.Gripper('right_gripper')
     except ValueError:
         rospy.logerr("Could not detect a gripper")
         return
-    
-    # Move arm to the initial position
-    limb.move_to_neutral()
     # Open the gripper
     gripper.open()
 

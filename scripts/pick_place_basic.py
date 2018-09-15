@@ -1,16 +1,19 @@
 #!/usr/bin/python
 #
-# Basic pick and place motion for the robot
-# (only for one cup)
+# Oscar E. Ramos
+# Department of Mechatronics Engineering
+# Universidad de Ingenieria y Tecnologia - UTEC
+# Lima, Peru
+#
+# Basic open loop pick and place motion for the robot (only for one cup)
 #
 # To execute:
 #     rosrun intera_interface enable_robot.py -e
-#     rosrun sawyer_utec pick_place.py
+#     rosrun sawyer_utec pick_place_basic.py
 #     rosrun intera_interface enable_robot.py -d
 # 
 
 import numpy as np
-import time
 
 import rospy
 from roslib import packages
@@ -170,7 +173,7 @@ def pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
         limb.move_to_joint_positions(result.jangles)
     # Close the gripper (0*dgripper [closed] to nsteps*dgripper [open])
     gripper.set_position(gripper_opening) 
-    time.sleep(1.0)
+    rospy.sleep(1.0)
     # Move the object up (intermediate pose)
     pose = ((xi, yi, zi+zpre_grasp), quat_i)
     result = get_ik(pose, result.jangles)
@@ -188,7 +191,7 @@ def pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
         limb.move_to_joint_positions(result.jangles)
     # Open the gripper
     gripper.open()
-    time.sleep(1.0)
+    rospy.sleep(1.0)
     # Move upwards without the object
     pose = ((xf, yf, zf+zpre_grasp), quat_f)
     result = get_ik(pose, result.jangles)
@@ -204,7 +207,7 @@ def main():
     limb = intera_interface.Limb('right')
     head_display = intera_interface.HeadDisplay()
     try:
-        gripper = intera_interface.Gripper('right')
+        gripper = intera_interface.Gripper('right_gripper')
         gripper.calibrate()
         nsteps = 5.0 # Increase it for a finer motion
         dgripper = gripper.MAX_POSITION / nsteps
