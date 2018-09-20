@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 #
+# Oscar E. Ramos
 # Department of Mechatronics Engineering
 # Universidad de Ingenieria y Tecnologia - UTEC
 # Lima, Peru
