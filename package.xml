@@ -11,6 +11,12 @@
   <author email="oramos@utec.edu.pe">Oscar E. Ramos</author>
 
   <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>sawyer_robot</build_depend>
+  <build_depend>sawyer_simulator</build_depend>
+  <build_export_depend>sawyer_robot</build_export_depend>
+  <build_export_depend>sawyer_simulator</build_export_depend>
+  <exec_depend>sawyer_robot</exec_depend>
+  <exec_depend>sawyer_simulator</exec_depend>
 
   <export>
   </export>

@@ -5,4 +5,6 @@ find_package(catkin REQUIRED)
 
 catkin_package()
 
-include_directories()
+include_directories(
+  ${catkin_INCLUDE_DIRS}
+  )
