@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+
+  <param name="robot_description" command="$(find xacro)/xacro --inorder $(find sawyer_description)/urdf/sawyer.urdf.xacro electric_gripper:=true" />
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+
+  <arg name="gui" default="True" />
+  <param name="use_gui" value="$(arg gui)"/>
+  <arg name="config_file" value="$(find sawyer_utec)/config/sawyer.rviz"/>
+  <node name="rviz" pkg="rviz" type="rviz" respawn="false" output="screen" args="-d $(arg config_file)"/>
+
+
+</launch>
