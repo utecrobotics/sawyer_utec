@@ -9,4 +9,6 @@
   <!-- Start the Sawyer world and set the initial joint configuration -->
   <node pkg="sawyer_utec" type="gz_sawyer_empty.py" name="gz_sawyer_empty" />
 
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find sawyer_utec)/config/sawyer.rviz" required="true" />
+  
 </launch>
