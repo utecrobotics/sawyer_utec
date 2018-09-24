@@ -213,7 +213,10 @@ import rospy
 from std_msgs.msg import Float64
 from sensor_msgs.msg import JointState
 from sensor_msgs.msg import Joy
+
+from intera_core_msgs.msg import JointCommand
 from markers import *
+
 pi = np.pi
 
 
@@ -268,6 +271,12 @@ class SawyerRobot(object):
         self.wrist_des_frame.setPose(x0)
         # For the real robot
         if (mode=="real"):
+            ns = "/robot/limb/right/"
+            jtopic = ns + "joint_command"
+            self.pubjs = rospy.Publisher(jtopic, JointCommand, queue_size=10)
+            self.jcommand = JointCommand()
+            self.jcommand.mode = 1
+            self.jcommand.names = []
             self.set_joints = self._publish_real
         # For the Gazebo simulation
         elif (mode=="sim"):
@@ -307,6 +316,7 @@ class SawyerRobot(object):
         """
         Publish the joints to the real robot
         """
+        self.jcommand.header.stamp = rospy.Time.now()
         pass
 
     def _readJoints(self, msg):
