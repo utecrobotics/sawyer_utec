@@ -100,15 +100,15 @@ def rot2quat(R):
     if ( np.fabs(R[0,0]-R[1,1]-R[2,2]+1.0) < dEpsilon ):
         quat[1] = 0.0
     else:
-        quat[1] = 0.5*sign(R[2,1]-R[1,2])*np.sqrt(R[0,0]-R[1,1]-R[2,2]+1.0)
+        quat[1] = 0.5*sgn(R[2,1]-R[1,2])*np.sqrt(R[0,0]-R[1,1]-R[2,2]+1.0)
     if ( np.fabs(R[1,1]-R[2,2]-R[0,0]+1.0) < dEpsilon ):
         quat[2] = 0.0
     else:
-        quat[2] = 0.5*sign(R[0,2]-R[2,0])*np.sqrt(R[1,1]-R[2,2]-R[0,0]+1.0)
+        quat[2] = 0.5*sgn(R[0,2]-R[2,0])*np.sqrt(R[1,1]-R[2,2]-R[0,0]+1.0)
     if ( np.fabs(R[2,2]-R[0,0]-R[1,1]+1.0) < dEpsilon ):
         quat[3] = 0.0
     else:
-        quat[3] = 0.5*sign(R[1,0]-R[0,1])*np.sqrt(R[2,2]-R[0,0]-R[1,1]+1.0)
+        quat[3] = 0.5*sgn(R[1,0]-R[0,1])*np.sqrt(R[2,2]-R[0,0]-R[1,1]+1.0)
 
     return np.array(quat)
 
@@ -213,6 +213,7 @@ import rospy
 from std_msgs.msg import Float64
 from sensor_msgs.msg import JointState
 from sensor_msgs.msg import Joy
+from markers import *
 pi = np.pi
 
 
@@ -256,6 +257,15 @@ class SawyerRobot(object):
         rospy.Subscriber("/robot/joint_states", JointState, self._readJoints)
         # Sensed joint configuration
         self.jstate_ = 7*[0.,]
+        # Markers for current and desired pose/position of the wrist
+        self.wrist_current_frame = FrameMarker()
+        self.wrist_des_frame = FrameMarker(0.5)
+        self.wrist_current_ball = BallMarker(color['GREEN'])
+        self.wrist_des_ball = BallMarker(color['RED'])
+        # Initialize the markers at zero
+        x0 = np.array([0., 0., 0., 1., 0., 0., 0.])
+        self.wrist_current_frame.setPose(x0)
+        self.wrist_des_frame.setPose(x0)
         # For the real robot
         if (mode=="real"):
             self.set_joints = self._publish_real
@@ -310,6 +320,37 @@ class SawyerRobot(object):
     def get_joint_state(self):
         return np.array(self.jstate_)
 
+    def wrist_frame(self, T=None):
+        if (T==None):
+            Tc = TF2xyzquat(self.wrist_pose())
+        else:
+            Tc = TF2xyzquat(T)
+        self.wrist_current_frame.setPose(Tc)
+
+    def wrist_ball(self, T=None):
+        if (T==None):
+            Tc = self.wrist_pose()
+            self.wrist_current_ball.xyz(Tc[0:3,3])
+        else:
+            self.wrist_current_ball.xyz(T[0:3,3])
+
+    def wrist_ball_d(self, T):
+        if (T.shape == (4,4)):
+            self.wrist_des_ball.xyz(T[0:3,3])
+        elif (T.size == 3):
+            self.wrist_des_ball.xyz(T)
+        else:
+            print 'wrist_ball_d: Currently not supported'
+
+    def wrist_frame_d(self, T):
+        if (T.shape == (4,4)):
+            Tc = TF2xyzquat(T)
+        elif (T.size == 7):
+            Tc = T
+        else:
+            print 'wrist_frame_d: Currently not supported'
+        self.wrist_des_frame.setPose(Tc)
+
     def _fkine(self, q, link=7):
         """
         Forward kinematics of Sawyer given any joint configuration
@@ -335,7 +376,7 @@ class SawyerRobot(object):
             print("Error (_fkine_sawyer): invalid link number")
         return T
 
-    def pose_wrist(self):
+    def wrist_pose(self):
         """
         Position and orientation of the robot wrist at the current sensed
         joint configuration
@@ -343,7 +384,7 @@ class SawyerRobot(object):
         """
         return self._fkine(np.array(self.jstate_), link=7)
 
-    def pose_elbow(self):
+    def elbow_pose(self):
         """
         Position and orientation of the robot elbow at the current sensed
         joint configuration
@@ -351,7 +392,7 @@ class SawyerRobot(object):
         """
         return self._fkine(np.array(self.jstate_), link=4)
 
-    def jacobian_wrist_position(self, delta=0.0001):
+    def wrist_linear_jacobian(self, q=[], delta=0.0001):
         """
         Analytic Jacobian for the wrist position. It returns a 3x7 matrix
 
@@ -361,10 +402,14 @@ class SawyerRobot(object):
            Jp -- Analytic Jacobian for position
         
         """
-        # Current position and orientation (homogeneous transformation)
-        T = self.pose_wrist()
-        # Current joint configuration
-        q = copy(np.array(self.jstate_))
+        if (q==[]):
+            # Current position and orientation (homogeneous transformation)
+            T = self.wrist_pose()
+            # Current joint configuration
+            q = copy(np.array(self.jstate_))
+        else:
+            # Pose given q
+            T = self._fkine(q)
         # Iteration for the derivative of each row
         for i in xrange(7):
             # Copy the initial joing configuration
@@ -378,7 +423,7 @@ class SawyerRobot(object):
         return self.Jp
 
 
-    def jacobian_wrist(self, delta=0.0001):
+    def wrist_jacobian(self, q=[], delta=0.0001):
         """
         Analytic Jacobian for both the wrist pose
         
@@ -388,10 +433,14 @@ class SawyerRobot(object):
            J -- Analytic Jacobian [Jp' Jor']'
 
         """
-        T = self.pose_wrist()
+        if (q==[]):
+            # Current position and orientation
+            T = self.wrist_pose()
+            # Current joint configuration
+            q = copy(np.array(self.jstate_))
+        else:
+            T = self._fkine(q)
         quat = rot2quat(T[0:3,0:3])
-        # Current joint configuration
-        q = copy(np.array(self.jstate_))
         for i in xrange(7):
             dq = copy(q);
             dq[i] = dq[i]+delta
@@ -399,9 +448,9 @@ class SawyerRobot(object):
             self.J[0:3,i] = (dT[0:3,3]-T[0:3,3])/delta
             dquat = rot2quat(dT[0:3,0:3])
             self.J[3:7,i] = (dquat-quat)/delta
-        return J
+        return self.J
 
-    def ikine_wrist(self, xdes):
+    def wrist_ikine_newton(self, xdes):
         """
         Compute the inverse kinematics of Sawyer numerically from the current
         joint configuration
@@ -413,14 +462,16 @@ class SawyerRobot(object):
         
         q  = copy(np.array(self.jstate_))
         for i in range(max_iter):
-            J = self.jacobian_wrist_position()
-            Jpinv = np.linalg.pinv(J)
-            # TODO
-            # Use damping pinv
-
-            
-            T = self.pose_wrist()
-            error = xdes - T[0:3,3];
+            J = self.wrist_linear_jacobian(q)
+            if (np.linalg.matrix_rank(J, 0.001)<3):
+                v = 0.01
+                Jpinv = np.dot(J.transpose(),
+                              np.linalg.inv(J.dot(J.transpose())+v*np.identity(3)))
+            else:
+                Jpinv = np.linalg.pinv(J)
+            T = self._fkine(q)
+            error = xdes - T[0:3,3]
+            #print np.dot(Jpinv, error)
             q = q + np.dot(Jpinv, error);
             # End condition
             if (np.linalg.norm(error)<epsilon):
