@@ -21,11 +21,17 @@ if __name__ == "__main__":
 
     rospy.init_node("JoystickControl")
     # Instance for interface with Sawyer
-    robot = SawyerRobot(mode="sim")
+    mode = "sim"
+    robot = SawyerRobot(mode)
     # Joystick
     joystick = JoystickInterface()
     time.sleep(0.5)
+
+    # Move to initial position
+    limb = intera_interface.Limb("right")
+    limb.move_to_neutral()
     # Gripper
+    print 'calibrating gripper ...'
     gripper = intera_interface.Gripper('right_gripper')
     gripper.calibrate()
     
@@ -57,9 +63,10 @@ if __name__ == "__main__":
     jgripper_old = 0
     
     # Loop rate (in Hz)
-    freq = 100
+    freq = 30
     dt = 1.0/freq
     rate = rospy.Rate(freq)
+    print 'ready to start motion ...'
     # Continuous execution loop
     while not rospy.is_shutdown():
         # Joystick values
@@ -77,13 +84,20 @@ if __name__ == "__main__":
         jgripper = joystick_axis[3]
             
         # Update the desired position
-        kx = 0.1
-        ky = 0.1
-        kz = 0.1
+        kx = 0.02
+        ky = 0.02
+        kz = 0.02
         xdes[0] += kx*dx
         xdes[1] += ky*dy
         xdes[2] += kz*dz
 
+        # Stop the motion
+        if (joystick_button[1]==1):
+            T = robot.wrist_pose()
+            xdes[0] = T[0,3]
+            xdes[1] = T[1,3]
+            xdes[2] = T[2,3]
+            
         # Verify the workspace
         x0=0.0; y0=0.0; z0=0.317
         rdes = (xdes[0]-x0)**2 + (xdes[1]-y0)**2 + (xdes[2]-z0)**2
@@ -113,7 +127,7 @@ if __name__ == "__main__":
         T = robot.wrist_pose()
         robot.wrist_frame(T)
         x = TF2xyzquat(T)
-        print x, xdes
+        #print x, xdes
         derror[0:3] = -k*( x[0:3] - xdes[0:3] )
         derror[3]  = k*( xdes[3]*x[3] + np.dot(xdes[4:],x[4:]) - 1.0 )
         derror[4:] = k*( x[3]*xdes[4:] - xdes[3]*x[4:] - np.dot(skew(xdes[4:]),x[4:]) )
@@ -142,6 +156,7 @@ if __name__ == "__main__":
             pass
         else:
             vgripper = 0.5*gripper.MAX_POSITION*(jgripper+1.0)
+            print vgripper
             gripper.set_position(vgripper)
         jgripper_old = jgripper
             

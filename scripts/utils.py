@@ -269,17 +269,20 @@ class SawyerRobot(object):
         x0 = np.array([0., 0., 0., 1., 0., 0., 0.])
         self.wrist_current_frame.setPose(x0)
         self.wrist_des_frame.setPose(x0)
+        # Store the mode
+        self.mode = mode
         # For the real robot
-        if (mode=="real"):
+        if (self.mode=="real"):
             ns = "/robot/limb/right/"
             jtopic = ns + "joint_command"
             self.pubjs = rospy.Publisher(jtopic, JointCommand, queue_size=10)
             self.jcommand = JointCommand()
             self.jcommand.mode = 1
-            self.jcommand.names = []
+            self.jcommand.names = ["right_j0", "right_j1", "right_j2", "right_j3", "right_j4",
+                                   "right_j5", "right_j6"]
             self.set_joints = self._publish_real
         # For the Gazebo simulation
-        elif (mode=="sim"):
+        elif (self.mode=="sim"):
             ns = "/robot/right_joint_position_controller/joints"
             topic0 = ns + "/right_j0_controller/command"
             topic1 = ns + "/right_j1_controller/command"
@@ -317,28 +320,33 @@ class SawyerRobot(object):
         Publish the joints to the real robot
         """
         self.jcommand.header.stamp = rospy.Time.now()
-        pass
-
+        self.jcommand.position = joints
+        self.pubjs.publish(self.jcommand)
+        
     def _readJoints(self, msg):
         """
         Callback to store the sensed joint positions from joint_states topic
 
         """
         # jstate_ must always be a valid joint configuration
-        self.jstate_ = msg.position[3:]
+        if (len(msg.position)>2):
+            self.jstate_ = msg.position
 
     def get_joint_state(self):
-        return np.array(self.jstate_)
+        if (self.mode=='sim'):
+            return np.array(self.jstate_[3:])
+        elif (self.mode=='real'):
+            return np.array(self.jstate_[1:8])
 
     def wrist_frame(self, T=None):
-        if (T==None):
+        if (T is None):
             Tc = TF2xyzquat(self.wrist_pose())
         else:
             Tc = TF2xyzquat(T)
         self.wrist_current_frame.setPose(Tc)
 
     def wrist_ball(self, T=None):
-        if (T==None):
+        if (T is None):
             Tc = self.wrist_pose()
             self.wrist_current_ball.xyz(Tc[0:3,3])
         else:
@@ -392,7 +400,7 @@ class SawyerRobot(object):
         joint configuration
 
         """
-        return self._fkine(np.array(self.jstate_), link=7)
+        return self._fkine(self.get_joint_state(), link=7)
 
     def elbow_pose(self):
         """
@@ -400,7 +408,7 @@ class SawyerRobot(object):
         joint configuration
 
         """
-        return self._fkine(np.array(self.jstate_), link=4)
+        return self._fkine(self.get_joint_state(), link=4)
 
     def wrist_linear_jacobian(self, q=[], delta=0.0001):
         """
@@ -416,7 +424,7 @@ class SawyerRobot(object):
             # Current position and orientation (homogeneous transformation)
             T = self.wrist_pose()
             # Current joint configuration
-            q = copy(np.array(self.jstate_))
+            q = copy(self.get_joint_state())
         else:
             # Pose given q
             T = self._fkine(q)
@@ -447,7 +455,7 @@ class SawyerRobot(object):
             # Current position and orientation
             T = self.wrist_pose()
             # Current joint configuration
-            q = copy(np.array(self.jstate_))
+            q = copy(self.get_joint_state())
         else:
             T = self._fkine(q)
         quat = rot2quat(T[0:3,0:3])
@@ -470,7 +478,7 @@ class SawyerRobot(object):
         max_iter = 1000
         delta    = 0.00001
         
-        q  = copy(np.array(self.jstate_))
+        q  = copy(self.get_joint_state())
         for i in range(max_iter):
             J = self.wrist_linear_jacobian(q)
             if (np.linalg.matrix_rank(J, 0.001)<3):
@@ -481,7 +489,6 @@ class SawyerRobot(object):
                 Jpinv = np.linalg.pinv(J)
             T = self._fkine(q)
             error = xdes - T[0:3,3]
-            #print np.dot(Jpinv, error)
             q = q + np.dot(Jpinv, error);
             # End condition
             if (np.linalg.norm(error)<epsilon):
@@ -498,7 +505,6 @@ class JoystickInterface(object):
         self.joy_.buttons = [0, 0, 0, 0, 0, 0, 0, 0, 0]
         
     def readJoystick(self, msg):
-        # print msg
         self.joy_ = msg
 
     def get_values(self):
