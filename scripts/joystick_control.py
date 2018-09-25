@@ -28,8 +28,9 @@ if __name__ == "__main__":
     time.sleep(0.5)
 
     # Move to initial position
-    limb = intera_interface.Limb("right")
-    limb.move_to_neutral()
+    if (mode=="real"):
+        limb = intera_interface.Limb("right")
+        limb.move_to_neutral()
     # Gripper
     print 'calibrating gripper ...'
     gripper = intera_interface.Gripper('right_gripper')
