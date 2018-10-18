@@ -186,8 +186,8 @@ def setJoints(q):
     Create a message that contains the joint names and the provided joint values.
 
     Arguments:
-      q -- Joint values with order [q0, q1, q2, q3, q4, q5, q6]. It can be a list, tuple
-           or a 1D numpy array)
+      q -- Joint values with order [q0, q1, q2, q3, q4, q5, q6]. It can be a
+           list, tuple or a 1D numpy array)
 
     Return:
       The message with the names: {'right_j0': q0, 'right_j1': q1, ...}
@@ -198,6 +198,36 @@ def setJoints(q):
 
     return msg
 
+
+def quaternionToRotation(q):
+    """
+    Convert a quaternioin to a rotation matrix
+
+    Arguments:
+      q -- quaternion [w, ex, ey, ez]
+
+    Return:
+      The equivalent rotation matrix
+
+    """
+    normq = np.linalg.norm(q)
+    if (np.fabs(normq-1.0)>0.001):
+        print "WARNING: Input quaternion is not unitary! ... ",
+        print "Returning identity"
+        return np.eye(3)
+
+    res = np.eye(3)
+    res[0,0] = 2.0*(q[0]*q[0]+q[1]*q[1])-1.0;
+    res[0,1] = 2.0*(q[1]*q[2]-q[0]*q[3]);
+    res[0,2] = 2.0*(q[1]*q[3]+q[0]*q[2]);
+    res[1,0] = 2.0*(q[1]*q[2]+q[0]*q[3]);
+    res[1,1] = 2.0*(q[0]*q[0]+q[2]*q[2])-1.0;
+    res[1,2] = 2.0*(q[2]*q[3]-q[0]*q[1]);
+    res[2,0] = 2.0*(q[1]*q[3]-q[0]*q[2]);
+    res[2,1] = 2.0*(q[2]*q[3]+q[0]*q[1]);
+    res[2,2] = 2.0*(q[0]*q[0]+q[3]*q[3])-1.0;
+
+    return res
 
 
 
@@ -493,6 +523,43 @@ class SawyerRobot(object):
             # End condition
             if (np.linalg.norm(error)<epsilon):
                 break
+        return q
+
+
+    def wrist_ikine_newton_pose(self, xdes):
+        """
+        Compute the inverse kinematics of Sawyer numerically from the current
+        joint configuration (uses the full pose: position + quaternion)
+
+        """
+        epsilon  = 0.001
+        max_iter = 500 #1000
+        delta    = 0.00001
+
+        q  = copy(self.get_joint_state())
+        error_o = np.zeros(4)
+        for i in range(max_iter):
+            J = self.wrist_jacobian(q)
+            print np.linalg.matrix_rank(J, 0.001), J.shape
+            print np.round(J,3)
+            if (np.linalg.matrix_rank(J, 0.001)<7):
+                v = 0.01
+                Jpinv = np.dot(J.transpose(),
+                              np.linalg.inv(J.dot(J.transpose())+
+                                            v*np.identity(7)))
+            else:
+                Jpinv = np.linalg.pinv(J)
+            T = self._fkine(q)
+            error_p = xdes[0:3] - T[0:3,3]
+            x = TF2xyzquat(T)
+            error_o[0] = xdes[3]*x[3] + np.dot(xdes[4:],x[4:]) - 1.0
+            error_o[1:] = -xdes[3]*x[4:] + x[3]*xdes[4:] - np.cross(xdes[4:], x[4:] )
+            error = np.hstack((error_p, error_o))
+            q = q + np.dot(Jpinv, error);
+            # End condition
+            if (np.linalg.norm(error)<epsilon):
+                break
+            print i, np.linalg.norm(error), error
         return q
 
 
