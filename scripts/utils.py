@@ -46,15 +46,15 @@ def quaternionFromRotation(R):
     quat = [0., 0., 0., 0.]
 
     quat[0] = 0.5*np.sqrt(R[0,0]+R[1,1]+R[2,2]+1.0)
-    if (np.abs(R[0,0]-R[1,1]-R[2,2]+1.0) < dEpsilon):
+    if (np.fabs(R[0,0]-R[1,1]-R[2,2]+1.0) < dEpsilon):
         quat[1] = 0.0
     else:
         quat[1] = 0.5*sgn(R[2,1]-R[1,2])*np.sqrt(R[0,0]-R[1,1]-R[2,2]+1.0)
-    if (np.abs(R[1,1]-R[2,2]-R[0,0]+1.0) < dEpsilon):
+    if (np.fabs(R[1,1]-R[2,2]-R[0,0]+1.0) < dEpsilon):
         quat[2] = 0.0
     else:
         quat[2] = 0.5*sgn(R[0,2]-R[2,0])*np.sqrt(R[1,1]-R[2,2]-R[0,0]+1.0)
-    if (np.abs(R[2,2]-R[0,0]-R[1,1]+1.0) < dEpsilon):
+    if (np.fabs(R[2,2]-R[0,0]-R[1,1]+1.0) < dEpsilon):
         quat[3] = 0.0
     else:
         quat[3] = 0.5*sgn(R[1,0]-R[0,1])*np.sqrt(R[2,2]-R[0,0]-R[1,1]+1.0)
@@ -83,36 +83,6 @@ def quaternionMult(q1, q2):
     return res
 
 
-def rot2quat(R):
-    """
-    Turn a rotation matrix into a quaternion.
-
-    Input:
-      R -- Rotation Matrix
-    Output
-      Q -- Quaternion [w, ex, ey, ez]
-
-    """
-    dEpsilon = 1e-6;
-    quat = 4*[0.,]
-
-    quat[0] = 0.5*np.sqrt(R[0,0]+R[1,1]+R[2,2]+1.0)
-    if ( np.fabs(R[0,0]-R[1,1]-R[2,2]+1.0) < dEpsilon ):
-        quat[1] = 0.0
-    else:
-        quat[1] = 0.5*sgn(R[2,1]-R[1,2])*np.sqrt(R[0,0]-R[1,1]-R[2,2]+1.0)
-    if ( np.fabs(R[1,1]-R[2,2]-R[0,0]+1.0) < dEpsilon ):
-        quat[2] = 0.0
-    else:
-        quat[2] = 0.5*sgn(R[0,2]-R[2,0])*np.sqrt(R[1,1]-R[2,2]-R[0,0]+1.0)
-    if ( np.fabs(R[2,2]-R[0,0]-R[1,1]+1.0) < dEpsilon ):
-        quat[3] = 0.0
-    else:
-        quat[3] = 0.5*sgn(R[1,0]-R[0,1])*np.sqrt(R[2,2]-R[0,0]-R[1,1]+1.0)
-
-    return np.array(quat)
-
-
 def TF2xyzquat(T):
     """
     Convert a homogeneous transformation matrix into the a vector containing the
@@ -124,7 +94,7 @@ def TF2xyzquat(T):
       X -- A pose vector in the format [x y z ew ex ey ez], donde la first part
            is Cartesian coordinates and the last part is a quaternion
     """
-    quat = rot2quat(T[0:3,0:3])
+    quat = quaternionFromRotation(T[0:3,0:3])
     res = [T[0,3], T[1,3], T[2,3], quat[0], quat[1], quat[2], quat[3]]
     return np.array(res)
 
@@ -488,13 +458,13 @@ class SawyerRobot(object):
             q = copy(self.get_joint_state())
         else:
             T = self._fkine(q)
-        quat = rot2quat(T[0:3,0:3])
+        quat = quaternionFromRotation(T[0:3,0:3])
         for i in xrange(7):
             dq = copy(q);
             dq[i] = dq[i]+delta
             dT = self._fkine(dq)
             self.J[0:3,i] = (dT[0:3,3]-T[0:3,3])/delta
-            dquat = rot2quat(dT[0:3,0:3])
+            dquat = quaternionFromRotation(dT[0:3,0:3])
             self.J[3:7,i] = (dquat-quat)/delta
         return self.J
 
