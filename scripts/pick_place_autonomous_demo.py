@@ -18,12 +18,16 @@ import numpy as np
 import rospy
 from roslib import packages
 from geometry_msgs.msg import PoseStamped
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import JointState, Image
 
 import intera_interface
 from intera_core_msgs.srv import SolvePositionIK, SolvePositionIKRequest
 
 from utils import *
+
+from apriltags_ros.msg import AprilTagDetectionArray
+
+from tf.transformations import euler_from_quaternion
 
 
 class JointResult:
@@ -104,6 +108,22 @@ def get_ik(pose, q_initial):
                      q_initial['right_j6']]
     ik_request.seed_angles.append(seed)
 
+    # ik_request.use_nullspace_goal.append(True)
+
+    #     # The nullspace goal can either be the full set or subset of joint angles
+
+    # goal = JointState()
+
+    # goal.name = ['right_j6']
+
+    # goal.position = [0.]
+
+    # ik_request.nullspace_goal.append(goal)
+    # # The gain used to bias toward the nullspace goal. Must be [0.0, 1.0]
+    # # If empty, the default gain of 0.4 will be used
+
+    # ik_request.nullspace_gain.append(0.4)
+
     try:
         # Block until the service is available
         rospy.wait_for_service(serv_name, 5.0)
@@ -135,14 +155,14 @@ def get_ik(pose, q_initial):
     return result
 
 
-def pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
-               zpre_grasp, qinit):
+def pick_place_autonomous(limb, gripper, pose_initial_estimate, pose_final, gripper_opening,
+               zpre_grasp, qinit, tags):
     """
     Pick and place an object
 
       limb - robot limb object
       gripper - robot gripper object
-      pose_initial - tuple ((x,y,z),(ew,ex,ey,ez))
+      pose_initial_estimate - tuple ((x,y,z),(ew,ex,ey,ez))
       pose_final - tuple ((x,y,z),(ew,ex,ey,ez))
       gripper_opening - opening of the gripper (double)
       zpre_grasp - height for the pre-grasping
@@ -152,55 +172,146 @@ def pick_place(limb, gripper, pose_initial, pose_final, gripper_opening,
     """
 
     # Get initial and final position/orientation
-    xi = pose_initial[0][0]
-    yi = pose_initial[0][1]
-    zi = pose_initial[0][2]
-    quat_i = pose_initial[1]
+    xi = pose_initial_estimate[0][0]
+    yi = pose_initial_estimate[0][1]
+    zi = pose_initial_estimate[0][2]
+    quat_i = pose_initial_estimate[1]
     xf = pose_final[0][0]
     yf = pose_final[0][1]
     zf = pose_final[0][2]
     quat_f = pose_final[1]
+
+    # 
+    quat_camera = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
     
-    # Move to a pre-grasping position
-    pose = ((xi, yi, zi+zpre_grasp), quat_i)
+    # Move to top of recipients
+    pose = ((xi, yi, zi+zpre_grasp), quat_camera)
     result = get_ik(pose, qinit)
+    result.jangles['right_j5'] = 0.0
     if (result.valid):
         limb.move_to_joint_positions(result.jangles)
-    # Move to grasp the object
-    pose = ((xi, yi, zi), quat_i)
+
+    mypose = limb.joint_angles_to_cartesian_pose(result.jangles, 'right_l5')
+    print mypose
+    euler = euler_from_quaternion([mypose.orientation.x,mypose.orientation.y,mypose.orientation.z,mypose.orientation.w])
+    roll = euler[0]
+    pitch = euler[1]
+    yaw = euler[2]
+
+    print roll, pitch, yaw
+
+    quat_camera = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+
+    # Move perpendicular
+    pose = ((xi, yi, zi+zpre_grasp), quat_camera)
+
     result = get_ik(pose, result.jangles)
+    result.jangles['right_j5'] = pitch - np.pi/2
     if (result.valid):
         limb.move_to_joint_positions(result.jangles)
-    # Close the gripper (0*dgripper [closed] to nsteps*dgripper [open])
-    gripper.set_position(gripper_opening) 
     rospy.sleep(1.0)
 
-
-    # Move the object up (intermediate pose)
-    pose = ((xi, yi, zi+zpre_grasp), quat_i)
-    result = get_ik(pose, result.jangles)
-    if (result.valid):
-        limb.move_to_joint_positions(result.jangles)
-    # Move the object in the air
-    pose = ((xf, yf, zf+zpre_grasp), quat_f)
-    result = get_ik(pose, result.jangles)
-    if (result.valid):
-        limb.move_to_joint_positions(result.jangles)
-    # Move to the final (release) pose
-    pose = ((xf, yf, zf), quat_f)
-    result = get_ik(pose, result.jangles)
-    if (result.valid):
-        limb.move_to_joint_positions(result.jangles)
-    # Open the gripper
-    gripper.open()
+    # Search for a tag
+    mytag = tags.one_tag_search()
     rospy.sleep(1.0)
+    #print mytag
 
-
-    # Move upwards without the object
-    pose = ((xf, yf, zf+zpre_grasp), quat_f)
-    result = get_ik(pose, result.jangles)
+    # Go to top
+    result = get_ik(pose, result.jangles)    
     if (result.valid):
         limb.move_to_joint_positions(result.jangles)
+
+    # Move to a pre-grasping position
+    x_offset = 0.
+    y_offset = 0.
+    x_tag = mytag.pose.pose.position.x + x_offset
+    y_tag = mytag.pose.pose.position.y + y_offset
+
+    #####
+    # Put some code of rotation and translation of camera here
+    #####
+
+    pose = ((xi + x_tag, yi + y_tag, zi + zpre_grasp ), quat_i)
+    result = get_ik(pose, result.jangles)
+
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+
+    rospy.sleep(20.0)
+
+    # # Move to grasp the object
+    # pose = ((xi + x_tag, yi + y_tag, zi ), quat_i)
+    # result = get_ik(pose, result.jangles)
+
+    # if (result.valid):
+    #     limb.move_to_joint_positions(result.jangles)
+
+
+    # # Close the gripper (0*dgripper [closed] to nsteps*dgripper [open])
+    # gripper.set_position(gripper_opening) 
+    # rospy.sleep(1.0)
+
+
+    # # Move the object up (intermediate pose)
+    # pose = ((xi, yi, zi+zpre_grasp), quat_i)
+    # result = get_ik(pose, result.jangles)
+    # if (result.valid):
+    #     limb.move_to_joint_positions(result.jangles)
+    # # Move the object in the air
+    # pose = ((xf, yf, zf+zpre_grasp), quat_f)
+    # result = get_ik(pose, result.jangles)
+    # if (result.valid):
+    #     limb.move_to_joint_positions(result.jangles)
+    # # Move to the final (release) pose
+    # pose = ((xf, yf, zf), quat_f)
+    # result = get_ik(pose, result.jangles)
+    # if (result.valid):
+    #     limb.move_to_joint_positions(result.jangles)
+    # # Open the gripper
+    # gripper.open()
+    # rospy.sleep(1.0)
+
+
+    # # Move upwards without the object
+    # pose = ((xf, yf, zf+zpre_grasp), quat_f)
+    # result = get_ik(pose, result.jangles)
+    # if (result.valid):
+    #     limb.move_to_joint_positions(result.jangles)
+
+class tag_searcher:
+    def __init__(self):
+        rospy.Subscriber('/tag_detections', AprilTagDetectionArray, self.tags)
+
+    def tags(self, data):
+        self.mytags = data
+
+    def one_tag_search(self):
+        while not self.mytags.detections:
+            continue_detection = input('There is no tag read. Do you want to tray again [y/n]')
+            if continue_detection in ['n']:
+                rospy.logerr("Could not detect tag, exiting the example.")
+                return
+        _number_tags =  len(self.mytags.detections)
+        selection = np.random.randint(_number_tags)
+        print selection
+        one_tag = self.mytags.detections[selection]
+        return one_tag
+
+
+def camera_setup(exposure = 10, gain = 60):
+    _cameras = intera_interface.Cameras()
+    _name_camera = 'right_hand_camera'
+    if  _cameras.verify_camera_exists(_name_camera):
+        _cameras.start_streaming(_name_camera)
+    else:
+        rospy.logerr("Could not detect the specified camera, exiting the example.")
+        return
+
+    _cameras.set_exposure(_name_camera, exposure)
+    _cameras.set_gain(_name_camera, gain)
+
+
+
 
 def main():
     # Initialize the node
@@ -222,6 +333,11 @@ def main():
     folder = str(packages.get_pkg_dir('sawyer_utec')) + '/images/'
     # Diplay the UTEC logo in the robot head
     head_display.display_image(folder+'up1.jpg', False, 1.0)
+
+    # Set camera and tag searcher
+    camera_setup()
+    tags = tag_searcher()
+
     
     # Move arm to the initial position
     limb.move_to_neutral()
@@ -264,16 +380,18 @@ def main():
     # Initial and final poses of the object
 
     quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-    offset_table_z = -0.02
+    offset_table_z = - 0.02
     # vaso 1
-    pose_initial1 = ((0.6, 0.50, 0.03 - offset_table_z), quat_init)
+    pose_initial1 = ((0.6, 0.4, 0.03 - offset_table_z), quat_init)
     quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
     pose_final1   = ((0.6, -0.5, 0.02 - offset_table_z), quat_final)
     # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
     gripper_opening = 3.5*dgripper
     # Offset in z (from the desired position) for pre-grasping
     z_pre_grasp = 0.20
-    pick_place(limb, gripper, pose_initial1, pose_final1, gripper_opening, z_pre_grasp, jangles_neutral)
+    pick_place_autonomous(limb, gripper, pose_initial1, pose_final1, gripper_opening, z_pre_grasp, jangles_neutral, tags)
+
+
 
 #     # vaso 2
 #     quat_init2 = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
