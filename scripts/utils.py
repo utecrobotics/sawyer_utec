@@ -59,7 +59,7 @@ def quaternionFromRotation(R):
     else:
         quat[3] = 0.5*sgn(R[1,0]-R[0,1])*np.sqrt(R[2,2]-R[0,0]-R[1,1]+1.0)
 
-    return quat
+    return np.array(quat)
 
 
 def quaternionMult(q1, q2):
@@ -198,6 +198,40 @@ def quaternionToRotation(q):
     res[2,2] = 2.0*(q[0]*q[0]+q[3]*q[3])-1.0;
 
     return res
+
+
+def q_to_dict(q):
+    """
+    Convert joint vector to dictionary containing sawyer joint names
+
+    Arguments:
+      q -- joint vector with 7 values (list or numpy array)
+
+    Returns:
+      Dictionary containing the joint names and the joint values
+
+    """
+    jnamevals = {'right_j0': q[0], 'right_j1': q[1], 'right_j2': q[2],
+                 'right_j3': q[3], 'right_j4': q[4], 'right_j5': q[5],
+                 'right_j6': q[6]}
+    return jnamevals
+
+
+def q_from_dict(qdict):
+    """
+    Convert a dictionary containing sawyer names to a joint vector
+
+    Arguments:
+      qdict -- dictionary containing the joint names and values
+
+    Returns:
+      Joint vector with 7 values (list or numpy array)
+
+    """
+    q = [qdict["right_j0"], qdict["right_j1"], qdict["right_j2"], 
+         qdict["right_j3"], qdict["right_j4"], qdict["right_j5"],
+         qdict["right_j6"]]
+    return np.array(q)
 
 
 
@@ -465,7 +499,11 @@ class SawyerRobot(object):
             dT = self._fkine(dq)
             self.J[0:3,i] = (dT[0:3,3]-T[0:3,3])/delta
             dquat = quaternionFromRotation(dT[0:3,0:3])
-            self.J[3:7,i] = (dquat-quat)/delta
+            #self.J[3:7,i] = (dquat-quat)/delta
+            dqq = np.zeros(4)
+            dqq[0] = dquat[0]*quat[0] + np.dot(dquat[1:],quat[1:])
+            dqq[1:] = -dquat[0]*quat[1:] + quat[0]*dquat[1:] - np.cross(dquat[1:], quat[1:])
+            self.J[3:7,i] = (dqq)/delta
         return self.J
 
     def wrist_ikine_newton(self, xdes):
@@ -496,24 +534,26 @@ class SawyerRobot(object):
         return q
 
 
-    def wrist_ikine_newton_pose(self, xdes):
+    def wrist_ikine_newton_pose(self, xdes, q=None):
         """
         Compute the inverse kinematics of Sawyer numerically from the current
         joint configuration (uses the full pose: position + quaternion)
 
         """
-        epsilon  = 0.001
-        max_iter = 500 #1000
+        epsilon  = 0.01
+        max_iter = 10 #1000
         delta    = 0.00001
 
-        q  = copy(self.get_joint_state())
+        if (q==None):
+            q  = copy(self.get_joint_state())
         error_o = np.zeros(4)
         for i in range(max_iter):
-            J = self.wrist_jacobian(q)
-            print np.linalg.matrix_rank(J, 0.001), J.shape
-            print np.round(J,3)
-            if (np.linalg.matrix_rank(J, 0.001)<7):
-                v = 0.01
+            J = self.wrist_jacobian(q, delta=1.0e-3)
+            # print np.linalg.matrix_rank(J, 0.001), J.shape
+            # print np.round(J,3)
+            if (np.linalg.matrix_rank(J, 0.01)<7):
+                print 'here rank:', np.linalg.matrix_rank(J, 0.01)
+                v = 0.001
                 Jpinv = np.dot(J.transpose(),
                               np.linalg.inv(J.dot(J.transpose())+
                                             v*np.identity(7)))
@@ -522,14 +562,25 @@ class SawyerRobot(object):
             T = self._fkine(q)
             error_p = xdes[0:3] - T[0:3,3]
             x = TF2xyzquat(T)
-            error_o[0] = xdes[3]*x[3] + np.dot(xdes[4:],x[4:]) - 1.0
+            error_o[0] =  (xdes[3]*x[3] + np.dot(xdes[4:],x[4:]) - 1.0)
             error_o[1:] = -xdes[3]*x[4:] + x[3]*xdes[4:] - np.cross(xdes[4:], x[4:] )
             error = np.hstack((error_p, error_o))
-            q = q + np.dot(Jpinv, error);
+
+            # Jpinv = Jpinv[:,[0,1,2,4,5,6]]
+            gain = 1.0 #0.2
+            q = q + gain*np.dot(Jpinv, error);
+
+            print '\nerror p:', error_p.T, np.linalg.norm(error_p)
+            print 'error o:', error_o.T, np.linalg.norm(error_o)
+            print 'error: ', np.linalg.norm(error)
+            print 'Jinv: ', np.round(J, 5)
+            print 'delta', np.dot(Jpinv, error);
             # End condition
             if (np.linalg.norm(error)<epsilon):
+                print 'converged'
+                print 'q:', q.T
                 break
-            print i, np.linalg.norm(error), error
+            # print i, np.linalg.norm(error), error
         return q
 
 
