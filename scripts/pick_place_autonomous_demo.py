@@ -22,7 +22,7 @@ from sensor_msgs.msg import JointState, Image
 
 import intera_interface
 from intera_core_msgs.srv import SolvePositionIK, SolvePositionIKRequest
-
+import time
 from utils import *
 
 from apriltags_ros.msg import AprilTagDetectionArray
@@ -192,13 +192,7 @@ def pick_place_autonomous(limb, gripper, pose_initial_estimate, pose_final, grip
         limb.move_to_joint_positions(result.jangles)
 
     mypose = limb.joint_angles_to_cartesian_pose(result.jangles, 'right_l5')
-    print mypose
-    euler = euler_from_quaternion([mypose.orientation.x,mypose.orientation.y,mypose.orientation.z,mypose.orientation.w])
-    roll = euler[0]
-    pitch = euler[1]
-    yaw = euler[2]
-
-    print roll, pitch, yaw
+    [_, pitch, _] = euler_from_quaternion([mypose.orientation.x,mypose.orientation.y,mypose.orientation.z,mypose.orientation.w])
 
     quat_camera = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
 
@@ -209,12 +203,26 @@ def pick_place_autonomous(limb, gripper, pose_initial_estimate, pose_final, grip
     result.jangles['right_j5'] = pitch - np.pi/2
     if (result.valid):
         limb.move_to_joint_positions(result.jangles)
-    rospy.sleep(1.0)
+    time.sleep(2)
+
+
 
     # Search for a tag
+
+    pose_camera = limb.joint_angles_to_cartesian_pose(result.jangles, 'right_hand_camera')
     mytag = tags.one_tag_search()
-    rospy.sleep(1.0)
-    #print mytag
+
+    R_camera = quaternionToRotation([pose_camera.orientation.w, pose_camera.orientation.x, pose_camera.orientation.y, pose_camera.orientation.z])
+    T = np.eye(4)
+    T[0:3,0:3] = R_camera
+    T[0:3,3] = [pose_camera.position.x, pose_camera.position.y, pose_camera.position.z]
+
+    P_tag = [mytag.pose.pose.position.x, mytag.pose.pose.position.y, mytag.pose.pose.position.z,1]
+    P_tag = np.array(P_tag).reshape(4,1)
+
+    P_tag_base = np.matmul(T, P_tag)
+
+
 
     # Go to top
     result = get_ik(pose, result.jangles)    
@@ -222,61 +230,55 @@ def pick_place_autonomous(limb, gripper, pose_initial_estimate, pose_final, grip
         limb.move_to_joint_positions(result.jangles)
 
     # Move to a pre-grasping position
-    x_offset = 0.
-    y_offset = 0.
-    x_tag = mytag.pose.pose.position.x + x_offset
-    y_tag = mytag.pose.pose.position.y + y_offset
 
-    #####
-    # Put some code of rotation and translation of camera here
-    #####
-
-    pose = ((xi + x_tag, yi + y_tag, zi + zpre_grasp ), quat_i)
+    pose = ((P_tag_base[0], P_tag_base[1], zi + zpre_grasp ), quat_i)
     result = get_ik(pose, result.jangles)
 
     if (result.valid):
         limb.move_to_joint_positions(result.jangles)
 
-    rospy.sleep(20.0)
+    #rospy.sleep(20.0)
 
-    # # Move to grasp the object
-    # pose = ((xi + x_tag, yi + y_tag, zi ), quat_i)
-    # result = get_ik(pose, result.jangles)
+    # Move to grasp the object
+    pose = ((P_tag_base[0], P_tag_base[1], zi), quat_i)
+    result = get_ik(pose, result.jangles)
 
-    # if (result.valid):
-    #     limb.move_to_joint_positions(result.jangles)
-
-
-    # # Close the gripper (0*dgripper [closed] to nsteps*dgripper [open])
-    # gripper.set_position(gripper_opening) 
-    # rospy.sleep(1.0)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
 
 
-    # # Move the object up (intermediate pose)
-    # pose = ((xi, yi, zi+zpre_grasp), quat_i)
-    # result = get_ik(pose, result.jangles)
-    # if (result.valid):
-    #     limb.move_to_joint_positions(result.jangles)
-    # # Move the object in the air
-    # pose = ((xf, yf, zf+zpre_grasp), quat_f)
-    # result = get_ik(pose, result.jangles)
-    # if (result.valid):
-    #     limb.move_to_joint_positions(result.jangles)
-    # # Move to the final (release) pose
-    # pose = ((xf, yf, zf), quat_f)
-    # result = get_ik(pose, result.jangles)
-    # if (result.valid):
-    #     limb.move_to_joint_positions(result.jangles)
-    # # Open the gripper
-    # gripper.open()
-    # rospy.sleep(1.0)
+    # Close the gripper (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper.set_position(gripper_opening)   
+    rospy.sleep(5.0)
 
 
-    # # Move upwards without the object
-    # pose = ((xf, yf, zf+zpre_grasp), quat_f)
-    # result = get_ik(pose, result.jangles)
-    # if (result.valid):
-    #     limb.move_to_joint_positions(result.jangles)
+    # Move the object up (intermediate pose)
+    pose = ((P_tag_base[0], P_tag_base[1], zi+zpre_grasp), quat_i)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+
+    # Move the object in the air
+    pose = ((xf, yf, zf+zpre_grasp), quat_f)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+
+    # Move to the final (release) pose
+    pose = ((xf, yf, zf), quat_f)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
+
+    # Open the gripper
+    gripper.open()
+    rospy.sleep(5.0)
+
+    # Move upwards without the object
+    pose = ((xf, yf, zf+zpre_grasp), quat_f)
+    result = get_ik(pose, result.jangles)
+    if (result.valid):
+        limb.move_to_joint_positions(result.jangles)
 
 class tag_searcher:
     def __init__(self):
@@ -287,13 +289,14 @@ class tag_searcher:
 
     def one_tag_search(self):
         while not self.mytags.detections:
-            continue_detection = input('There is no tag read. Do you want to tray again [y/n]')
+            continue_detection = input('There is no tag read. Do you want to try again [y/n]')
             if continue_detection in ['n']:
                 rospy.logerr("Could not detect tag, exiting the example.")
                 return
+            else:
+                pass
         _number_tags =  len(self.mytags.detections)
         selection = np.random.randint(_number_tags)
-        print selection
         one_tag = self.mytags.detections[selection]
         return one_tag
 
@@ -380,7 +383,7 @@ def main():
     # Initial and final poses of the object
 
     quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-    offset_table_z = - 0.02
+    offset_table_z = - 0.05
     # vaso 1
     pose_initial1 = ((0.6, 0.4, 0.03 - offset_table_z), quat_init)
     quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
@@ -388,67 +391,67 @@ def main():
     # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
     gripper_opening = 3.5*dgripper
     # Offset in z (from the desired position) for pre-grasping
-    z_pre_grasp = 0.20
+    z_pre_grasp = 0.17
     pick_place_autonomous(limb, gripper, pose_initial1, pose_final1, gripper_opening, z_pre_grasp, jangles_neutral, tags)
 
 
 
-#     # vaso 2
-#     quat_init2 = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-#     pose_initial2 = ((0.6, 0.40, 0.03 - offset_table_z), quat_init)
-#     quat_final2 = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-#     pose_final2   = ((0.6, -0.42, 0.02 - offset_table_z), quat_final)
-# # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
-#     gripper_opening = 3.5*dgripper
-#     # Offset in z (from the desired position) for pre-grasping
-#     z_pre_grasp = 0.20
-#     pick_place(limb, gripper, pose_initial2, pose_final2, gripper_opening, z_pre_grasp, jangles_neutral)
+    # vaso 2
+    quat_init2 = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial2 = ((0.6, 0.40, 0.03 - offset_table_z), quat_init)
+    quat_final2 = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final2   = ((0.6, -0.42, 0.02 - offset_table_z), quat_final)
+# Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 3.5*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.17
+    pick_place_autonomous(limb, gripper, pose_initial2, pose_final2, gripper_opening, z_pre_grasp, jangles_neutral, tags)
     
 
-# # vaso 3
-#     quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-#     pose_initial3 = ((0.6, 0.32, 0.03 - offset_table_z), quat_init)
-#     quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-#     pose_final3   = ((0.6, -0.34, 0.02 - offset_table_z), quat_final)
-# # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
-#     gripper_opening = 3.5*dgripper
-#     # Offset in z (from the desired position) for pre-grasping
-#     z_pre_grasp = 0.20
-#     pick_place(limb, gripper, pose_initial3, pose_final3, gripper_opening, z_pre_grasp, jangles_neutral)
+# vaso 3
+    quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial3 = ((0.6, 0.40, 0.03 - offset_table_z), quat_init)
+    quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final3   = ((0.6, -0.34, 0.02 - offset_table_z), quat_final)
+# Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 3.5*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.17
+    pick_place_autonomous(limb, gripper, pose_initial3, pose_final3, gripper_opening, z_pre_grasp, jangles_neutral, tags)
     
-#     # vaso 4
-#     quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-#     pose_initial4 = ((0.7, 0.5, 0.03 - offset_table_z), quat_init)
-#     quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-#     pose_final4   = ((0.6, -0.46, 0.12 - offset_table_z), quat_final)
-# # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
-#     gripper_opening = 3.5*dgripper
-#     # Offset in z (from the desired position) for pre-grasping
-#     z_pre_grasp = 0.20
-#     pick_place(limb, gripper, pose_initial4, pose_final4, gripper_opening, z_pre_grasp, jangles_neutral)
+    # vaso 4
+    quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial4 = ((0.6, 0.40, 0.03 - offset_table_z), quat_init)
+    quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final4   = ((0.6, -0.46, 0.12 - offset_table_z), quat_final)
+# Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 3.5*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.17
+    pick_place_autonomous(limb, gripper, pose_initial4, pose_final4, gripper_opening, z_pre_grasp, jangles_neutral, tags)
     
 
-#     # vaso 5
-#     quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-#     pose_initial5 = ((0.7, 0.4, 0.03 - offset_table_z), quat_init)
-#     quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-#     pose_final5   = ((0.6, -0.38, 0.12 - offset_table_z), quat_final) 
-# # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
-#     gripper_opening = 3.5*dgripper
-#     # Offset in z (from the desired position) for pre-grasping
-#     z_pre_grasp = 0.20
-#     pick_place(limb, gripper, pose_initial5, pose_final5, gripper_opening, z_pre_grasp, jangles_neutral)    
+    # vaso 5
+    quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial5 = ((0.6, 0.40, 0.03 - offset_table_z), quat_init)
+    quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final5   = ((0.6, -0.38, 0.12 - offset_table_z), quat_final) 
+# Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 3.5*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.17
+    pick_place_autonomous(limb, gripper, pose_initial5, pose_final5, gripper_opening, z_pre_grasp, jangles_neutral, tags)    
 
-#     #vaso 6
-#     quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-#     pose_initial = ((0.7, 0.32, 0.03 - offset_table_z), quat_init)
-#     quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
-#     pose_final   = ((0.6, -0.42, 0.22 - offset_table_z), quat_final)
-#     # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
-#     gripper_opening = 3.5*dgripper
-#     # Offset in z (from the desired position) for pre-grasping
-#     z_pre_grasp = 0.20
-#     pick_place(limb, gripper, pose_initial, pose_final, gripper_opening, z_pre_grasp, jangles_neutral)
+    #vaso 6
+    quat_init = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_initial = ((0.6, 0.40, 0.03 - offset_table_z), quat_init)
+    quat_final = quaternionFromAxisAngle(180.0, (0.0, 1.0, 0.0))
+    pose_final   = ((0.6, -0.42, 0.22 - offset_table_z), quat_final)
+    # Gripper opening (0*dgripper [closed] to nsteps*dgripper [open])
+    gripper_opening = 3.5*dgripper
+    # Offset in z (from the desired position) for pre-grasping
+    z_pre_grasp = 0.17
+    pick_place_autonomous(limb, gripper, pose_initial, pose_final, gripper_opening, z_pre_grasp, jangles_neutral, tags)
     
     limb.move_to_neutral()
     jangles_neutral = limb.joint_angles()
