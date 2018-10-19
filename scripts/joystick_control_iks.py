@@ -172,8 +172,9 @@ if __name__ == "__main__":
     robot.wrist_frame(T)
     # Get the initial pose
     x = TF2xyzquat(T)
-    # Initial pose
+    # Initial desired pose and its copy (its initial previous value)
     xdes = copy(x)
+    xdes_previous = copy(xdes)
     # xdes[1] = xdes[1]+0.05
     robot.wrist_frame_d(xdes)
     # Loop rate (in Hz)
@@ -191,15 +192,16 @@ if __name__ == "__main__":
             dy = joystick_axis[0]
             dz = 0
         else:
+            # Move up/down
             dx = 0; dy = 0
-            dz = joystick_axis[1]
+            dz = -joystick_axis[1]
         # Gripper
         jgripper = joystick_axis[3]
             
         # Gains for the joystick motion
-        kx = 0.05
-        ky = 0.05
-        kz = 0.05
+        kx = 0.02
+        ky = 0.02
+        kz = 0.02
         # Update the desired position
         xdes[0] += kx*dx
         xdes[1] += ky*dy
@@ -207,6 +209,7 @@ if __name__ == "__main__":
 
         # Stop the motion
         if (joystick_button[1]==1):
+            print 'stopping the motion'
             T = robot.wrist_pose()
             xdes[0] = T[0,3]
             xdes[1] = T[1,3]
@@ -215,8 +218,8 @@ if __name__ == "__main__":
         # Verify the workspace
         x0=0.0; y0=0.0; z0=0.317
         rdes = (xdes[0]-x0)**2 + (xdes[1]-y0)**2 + (xdes[2]-z0)**2
-        rmax = 1.04  # Considering only position (1.02^2)
-        # rmax = 0.7744  # Considering pose (0.88^2)
+        #rmax = 1.04  # Considering only position (1.02^2)
+        rmax = 0.7744  # Considering pose (0.88^2)
         if (rdes > rmax):
             xdes[0] -= kx*dx
             xdes[1] -= ky*dy
@@ -227,10 +230,12 @@ if __name__ == "__main__":
         robot.wrist_frame()
        
         # Update the desired position
-        qdict = q_to_dict(q)
-        result = get_ik(xdes, qdict, verbose=False)
-        if (result.valid):
-            q = q_from_dict(result.jangles)
+        print 'xdes delta: ', np.linalg.norm(xdes_previous-xdes)
+        if (np.linalg.norm(xdes_previous-xdes)>1e-6):
+            qdict = q_to_dict(q)
+            result = get_ik(xdes, qdict, verbose=True)
+            if (result.valid):
+                q = q_from_dict(result.jangles)
         if (False):
             print 'desired:', xdes
             print 'invkine:', robot._fkine(q)[0:3,3]
@@ -243,13 +248,15 @@ if __name__ == "__main__":
 
         # Publish the message to the robot
         robot.set_joints(q)
+        # The current xdes becomes the previous xdes
+        xdes_previous = copy(xdes)
 
         # Open/close the gripper
         if (jgripper == jgripper_old):
             pass
         else:
             vgripper = 0.5*gripper.MAX_POSITION*(jgripper+1.0)
-            print vgripper
+            print 'gripper:', vgripper
             gripper.set_position(vgripper)
         jgripper_old = jgripper
         
