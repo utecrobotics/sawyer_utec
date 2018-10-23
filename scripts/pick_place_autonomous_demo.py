@@ -153,6 +153,7 @@ def pick_place_autonomous(limb, gripper, pose_initial_estimate, pose_final,
               kinematics
 
     """
+    folder = str(packages.get_pkg_dir('sawyer_utec')) + '/images/'
 
     # Get initial and final position/orientation
     xi = pose_initial_estimate[0][0]
