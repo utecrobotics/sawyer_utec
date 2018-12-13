@@ -5,6 +5,11 @@
 # Universidad de Ingenieria y Tecnologia - UTEC
 # Lima, Peru
 #
+# Demo of a joystick with Sawyer controlling only position
+#
+# To execute in simulation:
+#    rosrun 
+#
 
 import numpy as np
 import time
@@ -47,10 +52,11 @@ if __name__ == "__main__":
             dx = 0; dy = 0
             dz = joystick_axis[1]
             
+        # Gains for the joystick motion
+        kx = 0.05
+        ky = 0.05
+        kz = 0.05
         # Update the desired position
-        kx = 0.1
-        ky = 0.1
-        kz = 0.1
         xdes[0] += kx*dx
         xdes[1] += ky*dy
         xdes[2] += kz*dz
